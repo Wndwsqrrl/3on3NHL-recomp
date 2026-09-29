@@ -4,8 +4,6 @@ A native PC port of **NHL 3 on 3 Arcade** (Xbox 360, XBLA, 2009), built by stati
 recompiling the original PowerPC executable to C++ with
 [ReXGlue](https://github.com/rexglue/rexglue-sdk). No emulator at runtime.
 
-Inspired by [OpenJam](https://github.com/GTTeancum/OpenJam).
-
 ## Status
 
 Early setup. Nothing boots yet.
