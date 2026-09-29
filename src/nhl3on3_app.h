@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <filesystem>
+
+#include <rex/filesystem.h>
 #include <rex/rex_app.h>
 
 class Nhl3on3App : public rex::ReXApp {
@@ -23,6 +26,26 @@ class Nhl3on3App : public rex::ReXApp {
     }
   }
 
+  // Find the game files when --game_data_root is not given: a "game" folder next to the
+  // executable (release layout), else "game/extracted" in any parent folder (repo layout).
+  void OnConfigurePaths(rex::PathConfig& paths) override {
+    if (!paths.game_data_root.empty()) {
+      return;
+    }
+    const auto exe_dir = rex::filesystem::GetExecutableFolder();
+    if (std::filesystem::exists(exe_dir / "game" / "default.xex")) {
+      paths.game_data_root = exe_dir / "game";
+      return;
+    }
+    for (auto dir = exe_dir; dir.has_parent_path() && dir != dir.parent_path();
+         dir = dir.parent_path()) {
+      if (std::filesystem::exists(dir / "game" / "extracted" / "default.xex")) {
+        paths.game_data_root = dir / "game" / "extracted";
+        return;
+      }
+    }
+  }
+
   // Other hooks available for customization:
   // void OnPostInitLogging() override {}
   // void OnLoadXexImage(std::string& xex_image) override {}
@@ -33,5 +56,4 @@ class Nhl3on3App : public rex::ReXApp {
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
   // CreateAchievementNotificationDialog() override;
   // void OnShutdown() override {}
-  // void OnConfigurePaths(rex::PathConfig& paths) override {}
 };
