@@ -1,0 +1,14 @@
+# Settings for nhl3on3, read from the folder the executable is in.
+# Command-line flags override these, e.g. --readback_resolve=none
+
+# Full XBLA license instead of the trial.
+license_mask = 1
+
+# Compile shaders before drawing; with background compilation player select hangs.
+async_shader_compilation = false
+
+# The game binds an uninitialized texture every frame; without this it is logged every frame.
+gpu_allow_invalid_fetch_constants = true
+
+# Text, the scoreboard and team-colored equipment are drawn on the GPU and read back by the game.
+readback_resolve = "full"

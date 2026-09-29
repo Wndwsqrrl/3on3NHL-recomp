@@ -23,3 +23,11 @@ else()
 endif()
 
 rexglue_setup_target(nhl3on3 GPU_PLUGINS xenos)
+
+# Default settings, read by the runtime from the executable's folder.
+add_custom_command(TARGET nhl3on3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/nhl3on3.toml
+        $<TARGET_FILE_DIR:nhl3on3>/nhl3on3.toml
+    VERBATIM
+)

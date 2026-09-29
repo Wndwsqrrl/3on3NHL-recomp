@@ -6,7 +6,6 @@
 
 #include <filesystem>
 
-#include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/rex_app.h>
 
@@ -30,7 +29,6 @@ class Nhl3on3App : public rex::ReXApp {
   // Find the game files when --game_data_root is not given: a "game" folder next to the
   // executable (release layout), else "game/extracted" in any parent folder (repo layout).
   void OnConfigurePaths(rex::PathConfig& paths) override {
-    ApplyDefaultSettings();
     if (!paths.game_data_root.empty()) {
       return;
     }
@@ -44,25 +42,6 @@ class Nhl3on3App : public rex::ReXApp {
       if (std::filesystem::exists(dir / "game" / "extracted" / "default.xex")) {
         paths.game_data_root = dir / "game" / "extracted";
         return;
-      }
-    }
-  }
-
-  // Settings this game needs, applied unless set on the command line or in a config file.
-  static void ApplyDefaultSettings() {
-    struct Default {
-      const char* name;
-      const char* value;
-    };
-    static constexpr Default kDefaults[] = {
-        {"license_mask", "1"},                    // full XBLA license, not the trial
-        {"async_shader_compilation", "false"},    // player select hangs while shaders compile
-        {"gpu_allow_invalid_fetch_constants", "true"},  // otherwise warns every frame
-        {"readback_resolve", "full"},  // text, scoreboard and helmets come from GPU resolves
-    };
-    for (const auto& d : kDefaults) {
-      if (!rex::cvar::HasNonDefaultValue(d.name)) {
-        rex::cvar::SetFlagByName(d.name, d.value);
       }
     }
   }
