@@ -8,6 +8,9 @@ project(nhl3on3 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# -O3 breaks the in-game scoreboard; Release uses -O2 like RelWithDebInfo, which renders correctly.
+string(REPLACE "-O3" "-O2" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
 include(generated/rexglue.cmake)
 
 # Sources
