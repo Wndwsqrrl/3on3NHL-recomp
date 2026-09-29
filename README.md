@@ -6,7 +6,7 @@ recompiling the original PowerPC executable to C++ with
 
 ## Status
 
-Early setup. Nothing boots yet.
+Boots to the title screen with graphics and audio. Controller input is not working yet.
 
 ## You need your own copy
 
