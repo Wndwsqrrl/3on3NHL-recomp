@@ -22,4 +22,4 @@ else()
     add_executable(nhl3on3 ${NHL3ON3_SOURCES})
 endif()
 
-rexglue_setup_target(nhl3on3)
+rexglue_setup_target(nhl3on3 GPU_PLUGINS xenos)

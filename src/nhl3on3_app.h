@@ -16,9 +16,15 @@ class Nhl3on3App : public rex::ReXApp {
         PPCImageConfig));
   }
 
-  // Override virtual hooks for customization:
+  // Use the Xenos GPU plugin unless --gpu_plugin says otherwise.
+  void OnPreSetup(rex::RuntimeConfig& config) override {
+    if (config.gpu_plugin.empty()) {
+      config.gpu_plugin = "xenos";
+    }
+  }
+
+  // Other hooks available for customization:
   // void OnPostInitLogging() override {}
-  // void OnPreSetup(rex::RuntimeConfig& config) override {}
   // void OnLoadXexImage(std::string& xex_image) override {}
   // void OnPostLoadXexImage() override {}
   // void OnPostSetup() override {}
