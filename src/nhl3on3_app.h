@@ -58,6 +58,7 @@ class Nhl3on3App : public rex::ReXApp {
         {"license_mask", "1"},                    // full XBLA license, not the trial
         {"async_shader_compilation", "false"},    // player select hangs while shaders compile
         {"gpu_allow_invalid_fetch_constants", "true"},  // otherwise warns every frame
+        {"readback_resolve", "full"},  // text, scoreboard and helmets come from GPU resolves
     };
     for (const auto& d : kDefaults) {
       if (!rex::cvar::HasNonDefaultValue(d.name)) {

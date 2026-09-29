@@ -6,7 +6,8 @@ recompiling the original PowerPC executable to C++ with
 
 ## Status
 
-Boots to the title screen with graphics and audio. Controller input is not working yet.
+Playable: menus and full matches work with graphics, audio and controller input.
+The intro movie renders garbled.
 
 ## You need your own copy
 
