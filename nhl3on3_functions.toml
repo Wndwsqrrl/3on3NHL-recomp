@@ -1,0 +1,9 @@
+# Functions the analysis cannot find on its own.
+
+[functions]
+# this-adjusting thunk (addi r3,r3,4; b 0x822EA2C8), reached only by a tail branch from 0x822F2A3C
+"0x822F1D58" = { size = 8 }
+# leaf helper (returns 0 or &array[r4]); analysis only found its second half at 0x82CAA070
+"0x82CAA060" = { size = 0x2C }
+# large VMX routine in an .embsec_ library section; .pdata length 0x64C0 (analysis overran to 1.3 MB)
+"0x82F57D08" = { size = 0x64C0 }

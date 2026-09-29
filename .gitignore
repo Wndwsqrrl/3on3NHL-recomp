@@ -4,8 +4,9 @@
 *.xexp
 basefile.exe
 
-# Recompiler output (regenerated locally)
-/generated/
+# Recompiler output (regenerated locally); keep the SDK's CMake glue
+/generated/*
+!/generated/rexglue.cmake
 
 # Build output
 /build/
