@@ -6,8 +6,7 @@ recompiling the original PowerPC executable to C++ with
 
 ## Status
 
-Playable: menus and full matches work with graphics, audio and controller input.
-The intro movie renders garbled.
+Playable: intro movies, menus and full matches work with graphics, audio and controller input.
 
 ## You need your own copy
 
