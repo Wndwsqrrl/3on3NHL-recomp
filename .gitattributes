@@ -4,3 +4,6 @@
 *.png binary
 *.jpg binary
 *.bin binary
+
+# Patches must keep LF line endings to apply cleanly
+*.patch text eol=lf
