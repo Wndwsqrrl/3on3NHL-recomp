@@ -9,7 +9,7 @@ recompiling the original PowerPC executable to C++ with
 Playable: intro movies, menus and full matches work with graphics, audio and controller input.
 
 Known issues:
-- Online play (the Xbox Live menu) is not available.
+- Online play (the Xbox Live menu) is not available yet; see [Online](#online).
 - Higher internal resolution (`--draw_resolution_scale_x/y`) breaks text and some textures.
 
 ## Playing it
@@ -25,10 +25,40 @@ This repository and its releases contain **no game code or data**.
 Xbox and PlayStation controllers work. If a PlayStation controller is not detected, close Steam,
 whose Steam Input can take the controller over.
 
-Achievements work: press **F7** in-game for the list. Unlocks are saved to
-`Documents\nhl3on3\achievements\`. The two online achievements can't be earned yet.
-
 Settings live in `nhl3on3.toml` next to the game; command-line flags override them.
+
+## Achievements
+
+All 12 of the game's achievements are supported. Open the list with **Achievements** in the
+main menu or **F7** in-game; unlocks pop up at the end of a match and are saved to
+`Documents\nhl3on3\achievements\`. The achievement list is read from your own copy of the game.
+
+Two achievements need online play and can't be earned yet: **Let's Play** (play an online game)
+and **Team Player** (play a quick ranked match with 2 guests).
+
+## Online
+
+The Xbox Live menu currently shows "You must be signed in to Xbox Live and the EA servers".
+The game's online mode used Xbox Live sign-in plus EA's Blaze servers, both of which are gone.
+The plan is to report a signed-in profile to the game and point it at a community Blaze server,
+which would also make the two online achievements earnable.
+
+## Planned
+
+**Mods and modernizing the game**
+- Updated rosters: current players' names, numbers, ratings and player types in the game's
+  roster database, with new portraits for the player select screens.
+- Updated team logos and other artwork, such as the NHL logo wall at startup.
+- More selectable players than the original 43.
+- UI changes, starting with repurposing the Xbox Live menu for mods and online.
+- Mods would be applied to your own copy of the game, so they contain only the changes,
+  not EA's files.
+
+**Launcher**
+- Installing and choosing mods.
+- A settings page for `nhl3on3.toml`.
+- An achievements page that works without starting the game.
+- Update checks for new releases.
 
 ## Building
 
