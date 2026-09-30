@@ -6,8 +6,13 @@
 
 #include <filesystem>
 
+#include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/rex_app.h>
+#include <rex/ui/keybinds.h>
+#include <rex/ui/ui_event.h>
+
+#include "kernel_stubs.h"
 
 class Nhl3on3App : public rex::ReXApp {
  public:
@@ -46,11 +51,23 @@ class Nhl3on3App : public rex::ReXApp {
     }
   }
 
+  // The game's Achievements menu item opens the achievements overlay, the same as its hotkey
+  // (bind_achievements, F7 by default).
+  void OnPostSetup() override {
+    nhl3on3::SetAchievementsOpener([this] {
+      app_context().CallInUIThreadDeferred([] {
+        rex::ui::KeyEvent press(nullptr,
+                                rex::ui::ParseVirtualKey(rex::cvar::GetFlagByName("bind_achievements")),
+                                0, false, false, false, false, false);
+        rex::ui::ProcessKeyEvent(press);
+      });
+    });
+  }
+
   // Other hooks available for customization:
   // void OnPostInitLogging() override {}
   // void OnLoadXexImage(std::string& xex_image) override {}
   // void OnPostLoadXexImage() override {}
-  // void OnPostSetup() override {}
   // void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {}
   // std::unique_ptr<rex::ui::ImGuiDialog> CreateAchievementsOverlay() override;
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
