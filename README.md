@@ -22,6 +22,19 @@ This repository and its releases contain **no game code or data**.
    `58410975` folder.
 3. Run `NHL 3on3 Launcher.exe`, click **Set up game**, then **Play**.
 
+## System requirements
+
+| | |
+|---|---|
+| OS | Windows 10 or 11, 64-bit |
+| CPU | x86-64 with SSE4.2 (Intel Core 1st gen / 2008 or newer, AMD FX / 2011 or newer, any Ryzen); AVX not needed |
+| GPU | Direct3D 12 support |
+| Memory | 4 GB RAM |
+| Disk | About 350 MB (release plus unpacked game) |
+| Game | Your own 3 on 3 NHL Arcade XBLA package |
+
+Tested on an NVIDIA GeForce RTX 2080 SUPER.
+
 ## Features
 
 | | Status |
