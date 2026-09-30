@@ -11,6 +11,8 @@ basefile.exe
 # Build output
 /build/
 /out/
+bin/
+obj/
 
 # Disassembler databases (Ghidra / IDA)
 *.gpr
