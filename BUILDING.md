@@ -57,14 +57,20 @@ Other presets: `win-amd64-debug` (slow, for tracking down crashes) and
 `win-amd64-relwithdebinfo` (optimized, with debug info). Release is built at `-O2` on purpose:
 at `-O3` the in-game scoreboard does not render.
 
-Files in this repository:
+What's in this repository:
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
 | `nhl3on3_manifest.toml` | ReXGlue project manifest: which XEX to recompile |
 | `nhl3on3_functions.toml` | Functions the recompiler's analysis misses (C++ thunks, leaf getters reached only through vtables or callbacks) |
 | `nhl3on3.toml` | Runtime settings, copied next to the executable |
-| `src/` | The app class and kernel exports the runtime lacks |
+| `src/` | The app class and kernel exports the runtime lacks or only stubs |
+| `launcher/` | The launcher (C#, .NET 8) |
+| `patches/rexglue/` | Fixes the port needs in ReXGlue |
+| `dist/` | Player README and license texts shipped with releases |
+| `docs/images/` | Screenshots for the README |
+
+The recompiler's generated C++ (`generated/default/`) is built locally and never committed.
 
 ## 4. Build the launcher
 

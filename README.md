@@ -1,31 +1,40 @@
-# nhl3on3-recomp
+# 3 on 3 NHL Arcade – PC Port
 
-A native PC port of **NHL 3 on 3 Arcade** (Xbox 360, XBLA, 2009), built by statically
+[![Latest release](https://img.shields.io/github/v/release/Wndwsqrrl/nhl3on3-recomp?label=release)](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Wndwsqrrl/nhl3on3-recomp/total)](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases)
+[![License: MIT](https://img.shields.io/github/license/Wndwsqrrl/nhl3on3-recomp)](LICENSE)
+![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-blue)
+
+A native PC port of **3 on 3 NHL Arcade** (Xbox 360, Xbox Live Arcade, 2009), made by statically
 recompiling the original PowerPC executable to C++ with
 [ReXGlue](https://github.com/rexglue/rexglue-sdk). No emulator at runtime.
 
-## Status
+![Gameplay](docs/images/gameplay.jpg)
 
-Playable: intro movies, menus and full matches work with graphics, audio and controller input.
-
-Known issues:
-- Online play (the Xbox Live menu) is not available yet; see [Online](#online).
-- Higher internal resolution (`--draw_resolution_scale_x/y`) breaks text and some textures.
-
-## Playing it
+## Quick start
 
 You need your own copy of the game's Xbox Live Arcade package (title ID `58410975`).
 This repository and its releases contain **no game code or data**.
 
-1. Download the latest release and unzip it.
-2. Put your XBLA package next to it (the file inside `58410975\000D0000\`; copying the whole
-   `58410975` folder in works too).
+1. Download the [latest release](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases/latest)
+   and unzip it.
+2. Put your XBLA package next to it: the file inside `58410975\000D0000\`, or the whole
+   `58410975` folder.
 3. Run `NHL 3on3 Launcher.exe`, click **Set up game**, then **Play**.
 
-Xbox and PlayStation controllers work. If a PlayStation controller is not detected, close Steam,
-whose Steam Input can take the controller over.
+## Features
 
-Settings live in `nhl3on3.toml` next to the game; command-line flags override them.
+| | Status |
+|---|---|
+| Menus, intro movies and full matches | ✅ |
+| Xbox and PlayStation controllers | ✅ |
+| Achievements (menu item and **F7** overlay, saved between sessions) | ✅ 10 of 12 · 🚧 2 need online |
+| Launcher that sets the game up from your package | ✅ |
+| Online play (Xbox Live menu) | 🚧 planned |
+| Mods: updated rosters, portraits, logos | 🚧 planned |
+| Higher internal resolution | ❌ breaks text and some textures |
+
+<p align="center"><img src="docs/images/main-menu.jpg" alt="Main menu" width="720"></p>
 
 ## Achievements
 
@@ -33,8 +42,8 @@ All 12 of the game's achievements are supported. Open the list with **Achievemen
 main menu or **F7** in-game; unlocks pop up at the end of a match and are saved to
 `Documents\nhl3on3\achievements\`. The achievement list is read from your own copy of the game.
 
-Two achievements need online play and can't be earned yet: **Let's Play** (play an online game)
-and **Team Player** (play a quick ranked match with 2 guests).
+Two need online play and can't be earned yet: **Let's Play** (play an online game) and
+**Team Player** (play a quick ranked match with 2 guests).
 
 ## Online
 
@@ -46,8 +55,8 @@ which would also make the two online achievements earnable.
 ## Planned
 
 **Mods and modernizing the game**
-- Updated rosters: current players' names, numbers, ratings and player types in the game's
-  roster database, with new portraits for the player select screens.
+- Updated rosters: current players' names, numbers, ratings and player types, with new
+  portraits for the player select screens.
 - Updated team logos and other artwork, such as the NHL logo wall at startup.
 - More selectable players than the original 43.
 - UI changes, starting with repurposing the Xbox Live menu for mods and online.
@@ -60,23 +69,25 @@ which would also make the two online achievements earnable.
 - An achievements page that works without starting the game.
 - Update checks for new releases.
 
+## Troubleshooting
+
+**"Windows protected your PC" when starting the launcher or game.** The executables aren't
+code-signed, so Windows SmartScreen warns about them. Click **More info**, then **Run anyway**.
+
+**A PlayStation controller isn't detected.** Close Steam and start the game again; Steam Input
+can take the controller over.
+
+**The launcher can't find the package.** Use **Browse** and pick the package file itself: the
+file with a long hex name inside `58410975\000D0000\`.
+
+**Where things are kept.** Settings: `nhl3on3.toml` next to the game (command-line flags
+override it). Achievements and shader cache: `Documents\nhl3on3\`. Logs: the `logs` folder
+next to the game.
+
 ## Building
 
 See [BUILDING.md](BUILDING.md). The build needs the ReXGlue SDK with the fixes in
 [patches/rexglue](patches/rexglue/README.md), and your own copy of the game.
-
-## What this repository contains
-
-| Path | Contents |
-|---|---|
-| `nhl3on3_manifest.toml`, `nhl3on3_functions.toml` | Recompiler configuration |
-| `nhl3on3.toml` | Runtime settings |
-| `src/` | The port's own code |
-| `launcher/` | The launcher (C#) that sets up the game from your package |
-| `patches/rexglue/` | Fixes the port needs in ReXGlue |
-| `dist/` | Player README and license texts shipped with releases |
-
-The recompiler's generated C++ is built locally and never committed.
 
 ## Credits
 
@@ -86,6 +97,6 @@ the [Xenia](https://xenia.jp) Xbox 360 emulator. Third-party software is listed 
 
 ## License
 
-MIT for the code in this repository. See [LICENSE](LICENSE). NHL 3 on 3 Arcade and all of
-its assets are property of Electronic Arts; this project is not affiliated with or endorsed
-by EA or the NHL.
+MIT for the code in this repository; see [LICENSE](LICENSE). 3 on 3 NHL Arcade and all of its
+assets are the property of Electronic Arts. This project is not affiliated with or endorsed by
+EA or the NHL.
