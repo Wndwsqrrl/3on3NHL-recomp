@@ -1,8 +1,8 @@
 # 3 on 3 NHL Arcade – PC Port
 
-[![Latest release](https://img.shields.io/github/v/release/Wndwsqrrl/nhl3on3-recomp?label=release)](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Wndwsqrrl/nhl3on3-recomp/total)](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases)
-[![License: MIT](https://img.shields.io/github/license/Wndwsqrrl/nhl3on3-recomp)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Wndwsqrrl/3on3NHL-recomp?label=release)](https://github.com/Wndwsqrrl/3on3NHL-recomp/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Wndwsqrrl/3on3NHL-recomp/total)](https://github.com/Wndwsqrrl/3on3NHL-recomp/releases)
+[![License: MIT](https://img.shields.io/github/license/Wndwsqrrl/3on3NHL-recomp)](LICENSE)
 ![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-blue)
 
 A native PC port of **3 on 3 NHL Arcade** (Xbox 360, Xbox Live Arcade, 2009), made by statically
@@ -16,7 +16,7 @@ recompiling the original PowerPC executable to C++ with
 You need your own copy of the game's Xbox Live Arcade package (title ID `58410975`).
 This repository and its releases contain **no game code or data**.
 
-1. Download the [latest release](https://github.com/Wndwsqrrl/nhl3on3-recomp/releases/latest)
+1. Download the [latest release](https://github.com/Wndwsqrrl/3on3NHL-recomp/releases/latest)
    and unzip it.
 2. Put your XBLA package next to it: the file inside `58410975\000D0000\`, or the whole
    `58410975` folder.
