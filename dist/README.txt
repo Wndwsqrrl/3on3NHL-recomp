@@ -19,6 +19,12 @@ Controls
 Xbox and PlayStation controllers work. If a PlayStation controller is not detected,
 close Steam (Steam Input can take over the controller) and start the game again.
 
+Achievements
+------------
+Press F7 in-game to see them. Unlocks are saved in Documents
+hl3on3chievements.
+The two online achievements (Let's Play, Team Player) can't be earned yet.
+
 Settings
 --------
 nhl3on3.toml holds the settings the game needs; command-line flags override it.
