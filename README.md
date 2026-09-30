@@ -26,8 +26,8 @@ Xbox and PlayStation controllers work. If a PlayStation controller is not detect
 whose Steam Input can take the controller over.
 
 Achievements work: press **F7** in-game for the list. Unlocks are saved to
+`Documents\nhl3on3\achievements\`. The two online achievements can't be earned yet.
 `Documents
-hl3on3chievements\`. The two online achievements can't be earned yet.
 
 Settings live in `nhl3on3.toml` next to the game; command-line flags override them.
 

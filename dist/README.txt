@@ -21,8 +21,7 @@ close Steam (Steam Input can take over the controller) and start the game again.
 
 Achievements
 ------------
-Press F7 in-game to see them. Unlocks are saved in Documents
-hl3on3chievements.
+Press F7 in-game to see them. Unlocks are saved in Documents\nhl3on3\achievements.
 The two online achievements (Let's Play, Team Player) can't be earned yet.
 
 Settings
