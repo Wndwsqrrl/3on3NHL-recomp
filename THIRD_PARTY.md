@@ -18,7 +18,9 @@ The release contains code from these projects. Their license texts are in
 | [SIMDe](https://github.com/simd-everywhere/simde) | MIT | `nhl3on3.exe` |
 | [UTF8-CPP](https://github.com/nemtrif/utfcpp) | Boost Software License 1.0 | header-only, used by the ReXGlue runtime |
 
-The launcher is a .NET 8 application; the self-contained build includes the .NET runtime (MIT).
+The launcher is a .NET 8 application. The self-contained build includes Microsoft's .NET runtime,
+redistributed under the Microsoft .NET Library License (`dotnet-LICENSE.txt`), with its
+third-party notices in `dotnet-ThirdPartyNotices.txt`.
 
 ## LGPL components
 
