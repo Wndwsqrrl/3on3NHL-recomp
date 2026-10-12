@@ -1,0 +1,938 @@
+diff --git a/CMakePresets.json b/CMakePresets.json
+index 622b924..e32d7ef 100644
+--- a/CMakePresets.json
++++ b/CMakePresets.json
+@@ -104,6 +104,25 @@
+                 "CMAKE_OSX_ARCHITECTURES": "arm64"
+             }
+         },
++        {
++            "name": "android-arm64-base",
++            "hidden": true,
++            "generator": "Ninja Multi-Config",
++            "binaryDir": "${sourceDir}/out/build/${presetName}",
++            "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
++            "cacheVariables": {
++                "ANDROID_ABI": "arm64-v8a",
++                "ANDROID_PLATFORM": "android-26",
++                "CMAKE_CXX_STANDARD": "23",
++                "CMAKE_CONFIGURATION_TYPES": "Debug;Release;RelWithDebInfo",
++                "CMAKE_CROSS_CONFIGS": "all",
++                "CMAKE_DEFAULT_BUILD_TYPE": "Debug",
++                "CMAKE_DEFAULT_CONFIGS": "all",
++                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
++                "REXGLUE_USE_VULKAN": "ON",
++                "REXGLUE_USE_D3D12": "OFF"
++            }
++        },
+         {
+             "name": "win-amd64",
+             "displayName": "Windows AMD64",
+@@ -139,6 +158,12 @@
+             "displayName": "macOS ARM64",
+             "description": "Multi-config build for macOS ARM64 using Clang",
+             "inherits": "mac-arm64-base"
++        },
++        {
++            "name": "android-arm64",
++            "displayName": "Android arm64-v8a",
++            "description": "Cross-compile for Android arm64-v8a (needs ANDROID_NDK_HOME)",
++            "inherits": "android-arm64-base"
+         }
+     ],
+     "buildPresets": [
+@@ -231,6 +256,21 @@
+             "name": "mac-arm64-relwithdebinfo",
+             "configurePreset": "mac-arm64",
+             "configuration": "RelWithDebInfo"
++        },
++        {
++            "name": "android-arm64-debug",
++            "configurePreset": "android-arm64",
++            "configuration": "Debug"
++        },
++        {
++            "name": "android-arm64-release",
++            "configurePreset": "android-arm64",
++            "configuration": "Release"
++        },
++        {
++            "name": "android-arm64-relwithdebinfo",
++            "configurePreset": "android-arm64",
++            "configuration": "RelWithDebInfo"
+         }
+     ],
+     "testPresets": [
+diff --git a/include/rex/chrono/chrono.h b/include/rex/chrono/chrono.h
+index d876846..cf5c33b 100644
+--- a/include/rex/chrono/chrono.h
++++ b/include/rex/chrono/chrono.h
+@@ -116,8 +116,11 @@ using XSystemClock = detail::NtSystemClock<detail::Domain::Guest>;
+ 
+ namespace std::chrono {
+ 
+-#ifdef __APPLE__
+-// Apple libc++ does not expose clock_time_conversion or clock_cast.
++#if defined(__APPLE__) || defined(_LIBCPP_VERSION)
++// libc++ (Apple platforms and the Android NDK) does not expose
++// clock_time_conversion or clock_cast, so provide a minimal primary template
++// and clock_cast here. _LIBCPP_VERSION is defined by the <chrono> include above
++// when the active standard library is libc++; libstdc++ and MS STL ship these.
+ template <class, class>
+ struct clock_time_conversion {};
+ 
+diff --git a/include/rex/main_android.h b/include/rex/main_android.h
+new file mode 100644
+index 0000000..2c4c64d
+--- /dev/null
++++ b/include/rex/main_android.h
+@@ -0,0 +1,52 @@
++#pragma once
++/**
++ * @file        rex/main_android.h
++ * @brief       Android platform helpers (API level query, app init hooks)
++ *
++ * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
++ *              All rights reserved.
++ *
++ * @license     BSD 3-Clause License
++ *              See LICENSE file in the project root for full license text.
++ */
++
++#include <rex/platform.h>
++
++#if REX_PLATFORM_ANDROID
++#include <cstdint>
++
++namespace rex {
++
++// Returns the running device's Android API level (e.g. 26, 33). Thin wrapper
++// over the NDK's android_get_device_api_level(); used to gate loading of
++// API-26+ dynamic symbols in the POSIX backends (see memory_posix.cpp,
++// threading_posix.cpp).
++int32_t GetAndroidApiLevel();
++
++namespace memory {
++// Loads libandroid's ASharedMemory_create (API 26+), required by
++// CreateFileMappingHandle for the guest memory arena (/dev/ashmem is gone on
++// modern Android). Must be called before Memory::Initialize().
++void AndroidInitialize();
++void AndroidShutdown();
++}  // namespace memory
++
++namespace thread {
++// Loads libc's pthread_getname_np (API 26+) used for thread-name queries.
++void AndroidInitialize();
++void AndroidShutdown();
++}  // namespace thread
++
++// Convenience: run all per-module Android init (call once at startup, before the
++// runtime/memory is constructed) and shutdown.
++inline void InitializeAndroidApp() {
++  memory::AndroidInitialize();
++  thread::AndroidInitialize();
++}
++inline void ShutdownAndroidApp() {
++  thread::AndroidShutdown();
++  memory::AndroidShutdown();
++}
++
++}  // namespace rex
++#endif  // REX_PLATFORM_ANDROID
+diff --git a/include/rex/thread/fiber.h b/include/rex/thread/fiber.h
+index 352af67..e7520ee 100644
+--- a/include/rex/thread/fiber.h
++++ b/include/rex/thread/fiber.h
+@@ -14,7 +14,14 @@
+ #include <rex/platform.h>
+ #include <cstddef>
+ 
+-#if REX_PLATFORM_LINUX || REX_PLATFORM_MAC
++#if REX_PLATFORM_ANDROID
++// Android's Bionic libc does not implement the ucontext API, so Fiber is
++// pthread-backed (see fiber_android.cpp) rather than ucontext-based.
++#include <pthread.h>
++
++#include <condition_variable>
++#include <mutex>
++#elif REX_PLATFORM_LINUX || REX_PLATFORM_MAC
+ #if REX_PLATFORM_MAC && !defined(_XOPEN_SOURCE)
+ // Darwin hides the deprecated ucontext APIs unless _XOPEN_SOURCE is defined
+ // before including <ucontext.h>.
+@@ -56,6 +63,20 @@ struct Fiber {
+ #if REX_PLATFORM_WIN32
+   void* handle_ = nullptr;
+   bool is_thread_fiber_ = false;
++#elif REX_PLATFORM_ANDROID
++  // pthread-backed fiber. Exactly one fiber runs at a time; a suspended fiber's
++  // thread blocks on cv_ until scheduled_ becomes true. See fiber_android.cpp.
++  pthread_t thread_{};
++  std::mutex mutex_;
++  std::condition_variable cv_;
++  bool scheduled_ = false;       // true when it is this fiber's turn to run
++  bool exit_requested_ = false;  // ask a created fiber's thread to unwind
++  void (*entry_)(void*) = nullptr;
++  void* arg_ = nullptr;
++  size_t stack_size_ = 0;
++  bool is_thread_fiber_ = false;
++
++  static void* ThreadMain(void* self);
+ #elif REX_PLATFORM_LINUX || REX_PLATFORM_MAC
+   ucontext_t context_{};
+   std::vector<uint8_t> stack_;
+diff --git a/include/rex/ui/surface_android.h b/include/rex/ui/surface_android.h
+new file mode 100644
+index 0000000..0c40a4f
+--- /dev/null
++++ b/include/rex/ui/surface_android.h
+@@ -0,0 +1,43 @@
++#pragma once
++/**
++ ******************************************************************************
++ * Xenia : Xbox 360 Emulator Research Project                                 *
++ ******************************************************************************
++ * Copyright 2021 Ben Vanik. All rights reserved.                             *
++ * Released under the BSD license - see LICENSE in the root for more details. *
++ ******************************************************************************
++ *
++ * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
++ * @modified    Android native-window surface, 2026
++ */
++
++#include <rex/ui/surface.h>
++
++struct ANativeWindow;
++struct SDL_Window;
++
++namespace rex {
++namespace ui {
++
++// Presentation surface backed by an Android ANativeWindow. The ANativeWindow*
++// is owned by SDL (it comes from SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER) and
++// stays valid while the SDL window exists; this surface only borrows it. The
++// Vulkan presenter consumes window() as VkAndroidSurfaceCreateInfoKHR::window
++// via vkCreateAndroidSurfaceKHR (see ui/vulkan/vulkan_presenter.cpp).
++class AndroidNativeWindowSurface final : public Surface {
++ public:
++  explicit AndroidNativeWindowSurface(ANativeWindow* window, SDL_Window* sdl_window)
++      : window_(window), sdl_window_(sdl_window) {}
++  TypeIndex GetType() const override { return kTypeIndex_AndroidNativeWindow; }
++  ANativeWindow* window() const { return window_; }
++
++ protected:
++  bool GetSizeImpl(uint32_t& width_out, uint32_t& height_out) const override;
++
++ private:
++  ANativeWindow* window_;
++  SDL_Window* sdl_window_;
++};
++
++}  // namespace ui
++}  // namespace rex
+diff --git a/include/rex/ui/windowed_app.h b/include/rex/ui/windowed_app.h
+index 50638d6..273757e 100644
+--- a/include/rex/ui/windowed_app.h
++++ b/include/rex/ui/windowed_app.h
+@@ -158,6 +158,16 @@ class WindowedApp {
+     return it != creators_->end() ? it->second : nullptr;
+   }
+ 
++  // When the library hosts exactly one app (the common case for a single-game
++  // library, e.g. the Android build), return its creator without needing to
++  // know the identifier.
++  static Creator GetSoleCreator() {
++    if (!creators_ || creators_->size() != 1) {
++      return nullptr;
++    }
++    return creators_->begin()->second;
++  }
++
+  private:
+   static std::unordered_map<std::string, Creator>* creators_;
+ #endif  // XE_UI_WINDOWED_APPS_IN_LIBRARY
+diff --git a/resources/templates/init/rexglue_cmake.inja b/resources/templates/init/rexglue_cmake.inja
+index f39557b..710cead 100644
+--- a/resources/templates/init/rexglue_cmake.inja
++++ b/resources/templates/init/rexglue_cmake.inja
+@@ -114,10 +114,20 @@ endmacro()
+ # codegen, including one a project assembles itself rather than taking the
+ # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
+ # names it.
++# Codegen is a host build step. When cross-compiling (e.g. Android), the in-tree
++# rex::rexglue would be built for the target and cannot run on the build host, so
++# REXGLUE_HOST_CODEGEN may point at a host-built rexglue executable. Using a plain
++# path in that case also drops the implicit dependency on the target-arch tool, so
++# it is not built for the target at all.
++if(REXGLUE_HOST_CODEGEN)
++    set(_rexglue_codegen_command "${REXGLUE_HOST_CODEGEN}")
++else()
++    set(_rexglue_codegen_command "$<TARGET_FILE:rex::rexglue>")
++endif()
+ add_custom_command(
+     OUTPUT "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.build.stamp"
+            {{ cmake_var("REXGLUE_ENTRYPOINT_GENERATED_SOURCES") }}
+-    COMMAND $<TARGET_FILE:rex::rexglue> codegen {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ names.snake_case }}_manifest.toml
++    COMMAND ${_rexglue_codegen_command} codegen {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ names.snake_case }}_manifest.toml
+     DEPFILE "{{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}/{{ entrypoint_out_dir }}/codegen.d"
+     WORKING_DIRECTORY {{ cmake_var("CMAKE_CURRENT_SOURCE_DIR") }}
+     COMMENT "Generating recompiled code for {{ names.snake_case }}"
+diff --git a/src/core/CMakeLists.txt b/src/core/CMakeLists.txt
+index 1ddafd0..11bf137 100644
+--- a/src/core/CMakeLists.txt
++++ b/src/core/CMakeLists.txt
+@@ -63,7 +63,6 @@ elseif(UNIX)
+         dynlib_posix.cpp
+         exception_handler_posix.cpp
+         filesystem_posix.cpp
+-        fiber_posix.cpp
+         mapped_memory_posix.cpp
+         math_gcc.cpp
+         memory_posix.cpp
+@@ -74,6 +73,17 @@ elseif(UNIX)
+         system_posix.cpp
+         threading_posix.cpp
+     )
++    if(ANDROID)
++        # Android's Bionic libc does not implement the ucontext API
++        # (getcontext/makecontext/swapcontext) that fiber_posix.cpp relies on,
++        # so Android uses a pthread-backed Fiber backend instead.
++        target_sources(rexcore PRIVATE
++            fiber_android.cpp
++            main_android.cpp
++            filesystem_android.cpp)
++    else()
++        target_sources(rexcore PRIVATE fiber_posix.cpp)
++    endif()
+ endif()
+ 
+ # Xenos data-format layer (stateless; headers under include/rex/graphics/).
+@@ -100,6 +110,10 @@ target_include_directories(rexcore PRIVATE
+ 
+ if(APPLE)
+     target_link_libraries(rexcore PRIVATE pthread)
++elseif(ANDROID)
++    # Bionic folds pthread and rt into libc (no separate libpthread/librt);
++    # only libdl is a standalone library.
++    target_link_libraries(rexcore PRIVATE dl)
+ elseif(UNIX)
+     target_link_libraries(rexcore PRIVATE pthread rt dl)
+ endif()
+diff --git a/src/core/fiber_android.cpp b/src/core/fiber_android.cpp
+new file mode 100644
+index 0000000..2d61b31
+--- /dev/null
++++ b/src/core/fiber_android.cpp
+@@ -0,0 +1,148 @@
++/**
++ * @file        rex/core/fiber_android.cpp
++ * @brief       Android backend for rex::thread::Fiber (pthread-backed)
++ *
++ * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
++ *              All rights reserved.
++ *
++ * @license     BSD 3-Clause License
++ *              See LICENSE file in the project root for full license text.
++ *
++ * @remarks
++ * Android's Bionic libc does not implement the ucontext API
++ * (getcontext/makecontext/swapcontext) used by fiber_posix.cpp. This backend
++ * gives every fiber its own pthread and enforces that exactly one fiber runs at
++ * a time: a suspended fiber's thread blocks on its condition variable until it
++ * is scheduled again. Cooperative, single-at-a-time semantics are preserved,
++ * which is what the guest-thread scheduler relies on.
++ *
++ * This is a correctness-first bringup backend. A faster drop-in replacement
++ * would be an AArch64 register-save/restore context switch (boost.context-style
++ * fcontext) that keeps all fibers on one OS thread; swap this file for that
++ * without touching callers if fiber-switch cost shows up in profiling.
++ */
++
++#include <rex/platform.h>
++#if REX_PLATFORM_ANDROID
++
++#include <rex/thread/fiber.h>
++
++#include <pthread.h>
++
++#include <cassert>
++#include <condition_variable>
++#include <mutex>
++
++namespace rex::thread {
++
++thread_local Fiber* Fiber::tls_current_ = nullptr;
++
++Fiber* Fiber::ConvertCurrentThread() {
++  auto* f = new Fiber();
++  f->is_thread_fiber_ = true;
++  f->thread_ = pthread_self();
++  f->scheduled_ = true;  // this fiber is the one currently executing
++  tls_current_ = f;
++  return f;
++}
++
++/*static*/ void* Fiber::ThreadMain(void* arg) {
++  auto* self = static_cast<Fiber*>(arg);
++  // Each fiber runs on its own OS thread, so Fiber::Current() is just this
++  // thread's own tls_current_; SwitchTo never has to reassign it.
++  tls_current_ = self;
++
++  {
++    std::unique_lock<std::mutex> lk(self->mutex_);
++    self->cv_.wait(lk, [self] { return self->scheduled_; });
++  }
++  if (self->exit_requested_) {
++    return nullptr;
++  }
++
++  self->entry_(self->arg_);
++
++  // A guest fiber's entry is not expected to return (it switches away and is
++  // torn down from another fiber). If it ever does, park so Destroy can still
++  // join this thread cleanly.
++  for (;;) {
++    std::unique_lock<std::mutex> lk(self->mutex_);
++    self->cv_.wait(lk, [self] { return self->exit_requested_; });
++    return nullptr;
++  }
++}
++
++Fiber* Fiber::Create(size_t stack_size, void (*entry)(void*), void* arg) {
++  auto* f = new Fiber();
++  f->entry_ = entry;
++  f->arg_ = arg;
++  f->stack_size_ = stack_size;
++
++  pthread_attr_t attr;
++  pthread_attr_init(&attr);
++  if (stack_size > 0) {
++    size_t want = stack_size;
++    if (want < static_cast<size_t>(PTHREAD_STACK_MIN)) {
++      want = static_cast<size_t>(PTHREAD_STACK_MIN);
++    }
++    pthread_attr_setstacksize(&attr, want);
++  }
++  int rc = pthread_create(&f->thread_, &attr, &Fiber::ThreadMain, f);
++  pthread_attr_destroy(&attr);
++  if (rc != 0) {
++    delete f;
++    return nullptr;
++  }
++  return f;
++}
++
++void Fiber::SwitchTo(Fiber* target) {
++  Fiber* self = tls_current_;
++  assert(self && "SwitchTo called on a thread that is not a fiber");
++  if (target == self) {
++    return;
++  }
++
++  // Mark self as not runnable BEFORE waking the target. If the target
++  // immediately switches back to us, it sets self->scheduled_ = true after this
++  // point, so the wait below observes it (and never clobbers it).
++  {
++    std::lock_guard<std::mutex> lk(self->mutex_);
++    self->scheduled_ = false;
++  }
++  {
++    std::lock_guard<std::mutex> lk(target->mutex_);
++    target->scheduled_ = true;
++  }
++  target->cv_.notify_one();
++
++  {
++    std::unique_lock<std::mutex> lk(self->mutex_);
++    self->cv_.wait(lk, [self] { return self->scheduled_; });
++  }
++}
++
++void Fiber::Destroy() {
++  if (is_thread_fiber_) {
++    // Wraps the owning OS thread; nothing to join.
++    if (this == tls_current_) {
++      tls_current_ = nullptr;
++    }
++    delete this;
++    return;
++  }
++
++  assert(this != tls_current_ && "Destroy called on the currently running fiber");
++  {
++    std::lock_guard<std::mutex> lk(mutex_);
++    exit_requested_ = true;
++    scheduled_ = true;  // unblock the thread whether it is pre-start or parked
++  }
++  cv_.notify_one();
++  pthread_join(thread_, nullptr);
++  delete this;
++}
++
++}  // namespace rex::thread
++
++#endif  // REX_PLATFORM_ANDROID
+diff --git a/src/core/filesystem_android.cpp b/src/core/filesystem_android.cpp
+new file mode 100644
+index 0000000..4c7a7dd
+--- /dev/null
++++ b/src/core/filesystem_android.cpp
+@@ -0,0 +1,52 @@
++/**
++ * @file        rex/core/filesystem_android.cpp
++ * @brief       Android filesystem helpers (content:// URI support)
++ *
++ * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
++ *              All rights reserved.
++ *
++ * @license     BSD 3-Clause License
++ *              See LICENSE file in the project root for full license text.
++ *
++ * @remarks
++ * The declarations in rex/filesystem.h for these Android helpers were present
++ * but unimplemented. Full content:// (Storage Access Framework) support needs
++ * JNI into the Android ContentResolver. This port stages game data as plain
++ * files under the app's external storage (see windowed_app_main_sdl.cpp), so
++ * content URIs are not used; these definitions provide the required symbols and
++ * fail closed if a content:// path is ever passed. Replace with a JNI-backed
++ * implementation to support SAF-provided game data.
++ */
++
++#include <rex/platform.h>
++
++#if REX_PLATFORM_ANDROID
++
++#include <rex/filesystem.h>
++#include <rex/logging.h>
++
++namespace rex {
++namespace filesystem {
++
++void AndroidInitialize() {}
++
++void AndroidShutdown() {}
++
++bool IsAndroidContentUri(const std::string_view source) {
++  return source.starts_with("content://");
++}
++
++int OpenAndroidContentFileDescriptor(const std::string_view uri, const char* mode) {
++  (void)mode;
++  REXLOG_WARN(
++      "OpenAndroidContentFileDescriptor: content:// URIs are not supported in "
++      "this build; stage game files under the app's external storage instead "
++      "(uri: {})",
++      uri);
++  return -1;
++}
++
++}  // namespace filesystem
++}  // namespace rex
++
++#endif  // REX_PLATFORM_ANDROID
+diff --git a/src/core/logging.cpp b/src/core/logging.cpp
+index 1645848..76a2bd1 100644
+--- a/src/core/logging.cpp
++++ b/src/core/logging.cpp
+@@ -12,6 +12,7 @@
+ #include <algorithm>
+ #include <cctype>
+ #include <charconv>
++#include <cstdio>
+ #include <filesystem>
+ #include <mutex>
+ #include <unordered_map>
+@@ -19,6 +20,9 @@
+ 
+ #include <spdlog/sinks/rotating_file_sink.h>
+ #include <spdlog/sinks/stdout_color_sinks.h>
++#if defined(__ANDROID__)
++#include <spdlog/sinks/android_sink.h>
++#endif
+ 
+ #include <toml++/toml.hpp>
+ 
+@@ -150,6 +154,10 @@ void InitLoggingEarly() {
+ 
+ #if REX_PLATFORM_WIN32
+   auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
++#elif REX_PLATFORM_ANDROID
++  // Android has no usable stdout for apps; log to logcat (tag "nhl3on3") so the
++  // engine's output is visible via `adb logcat -s nhl3on3`.
++  auto sink = std::make_shared<spdlog::sinks::android_sink_mt>("nhl3on3");
+ #else
+   auto sink = std::make_shared<spdlog::sinks::stdout_sink_mt>();
+ #endif
+@@ -198,7 +206,7 @@ void InitLogging(const LogConfig& config) {
+   //     apps and does not conflict with the stdout console sink, so keep it.
+   //   Non-Windows: drop the early stdout sink unconditionally so file-only
+   //     configs don't leak to stdout and console configs don't duplicate.
+-#if !REX_PLATFORM_WIN32
++#if !REX_PLATFORM_WIN32 && !REX_PLATFORM_ANDROID
+   if (g_early_sink) {
+     for (auto& entry : g_registry) {
+       if (entry.logger)
+@@ -207,6 +215,9 @@ void InitLogging(const LogConfig& config) {
+     g_early_sink.reset();
+   }
+ #endif
++  // On Android the early stdout sink is kept: SDL redirects stdout/stderr to
++  // logcat, which is the platform's log channel (there is no writable file-log
++  // directory by default).
+ 
+   // Console sink (stdout, colored). Intended for console-subsystem processes.
+   if (config.log_to_console) {
+@@ -216,22 +227,29 @@ void InitLogging(const LogConfig& config) {
+     g_console_sink = sink;
+   }
+ 
+-  // File sink (rotating) with sequential naming fallback
+-  std::string resolved_path;
+-  if (config.log_file) {
+-    resolved_path = config.log_file;
+-  } else if (!config.app_name.empty()) {
+-    auto log_dir = config.log_dir.empty() ? std::filesystem::current_path() / "logs"
+-                                          : std::filesystem::path(config.log_dir);
+-    resolved_path = NextSequentialLogPath(log_dir, config.app_name).string();
+-  }
+-  if (!resolved_path.empty()) {
+-    auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+-        resolved_path, static_cast<size_t>(REXCVAR_GET(log_max_file_size_mb)) * 1024 * 1024,
+-        static_cast<size_t>(REXCVAR_GET(log_max_files)), false);
+-    sink->set_level(spdlog::level::trace);
+-    sink->set_pattern(config.file_pattern);
+-    g_file_sink = sink;
++  // File sink (rotating) with sequential naming fallback. Best-effort: resolving
++  // or creating the log directory can fail (e.g. a read-only working directory
++  // like Android's default /system/bin), so a missing writable log location must
++  // never abort startup. On failure, continue without a file sink.
++  try {
++    std::string resolved_path;
++    if (config.log_file) {
++      resolved_path = config.log_file;
++    } else if (!config.app_name.empty()) {
++      auto log_dir = config.log_dir.empty() ? std::filesystem::current_path() / "logs"
++                                            : std::filesystem::path(config.log_dir);
++      resolved_path = NextSequentialLogPath(log_dir, config.app_name).string();
++    }
++    if (!resolved_path.empty()) {
++      auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
++          resolved_path, static_cast<size_t>(REXCVAR_GET(log_max_file_size_mb)) * 1024 * 1024,
++          static_cast<size_t>(REXCVAR_GET(log_max_files)), false);
++      sink->set_level(spdlog::level::trace);
++      sink->set_pattern(config.file_pattern);
++      g_file_sink = sink;
++    }
++  } catch (const std::exception& e) {
++    std::fprintf(stderr, "[logging] file sink disabled (%s)\n", e.what());
+   }
+ 
+   g_extra_sinks = config.extra_sinks;
+diff --git a/src/core/main_android.cpp b/src/core/main_android.cpp
+new file mode 100644
+index 0000000..52f2ca4
+--- /dev/null
++++ b/src/core/main_android.cpp
+@@ -0,0 +1,33 @@
++/**
++ * @file        rex/core/main_android.cpp
++ * @brief       Android platform helpers implementation
++ *
++ * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
++ *              All rights reserved.
++ *
++ * @license     BSD 3-Clause License
++ *              See LICENSE file in the project root for full license text.
++ */
++
++#include <rex/platform.h>
++
++#if REX_PLATFORM_ANDROID
++
++#include <rex/main_android.h>
++
++#include <android/api-level.h>
++
++namespace rex {
++
++int32_t GetAndroidApiLevel() {
++  // Runtime device API level. android_get_device_api_level() has an inline
++  // fallback (via __system_property_get) for devices below API 29, so it is
++  // safe to call on our min-SDK (26). Fall back to the compile-time target if
++  // the query ever fails.
++  int level = android_get_device_api_level();
++  return level > 0 ? level : __ANDROID_API__;
++}
++
++}  // namespace rex
++
++#endif  // REX_PLATFORM_ANDROID
+diff --git a/src/core/memory_posix.cpp b/src/core/memory_posix.cpp
+index b52bf39..2cdcd55 100644
+--- a/src/core/memory_posix.cpp
++++ b/src/core/memory_posix.cpp
+@@ -53,8 +53,7 @@
+ 
+ #include <linux/ashmem.h>
+ 
+-// TODO(tomc): Android or maybe na. idk
+-// #include "xenia/base/main_android.h"
++#include <rex/main_android.h>
+ #endif
+ 
+ namespace rex {
+diff --git a/src/core/threading_posix.cpp b/src/core/threading_posix.cpp
+index 9ac8d15..211123f 100644
+--- a/src/core/threading_posix.cpp
++++ b/src/core/threading_posix.cpp
+@@ -270,8 +270,10 @@ static sem_t* RexCreateAnonymousSemaphore() {
+ class PosixConditionBase {
+  public:
+   PosixConditionBase() {
+-#if REX_PLATFORM_LINUX
++#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
+     // Use robust mutexes so waits can recover if owner thread terminates.
++    // Android's Bionic libc has no robust-mutex support (PTHREAD_MUTEX_ROBUST /
++    // pthread_mutex_consistent), so it falls through to a plain mutex.
+     pthread_mutexattr_t attr;
+     if (pthread_mutexattr_init(&attr) == 0) {
+       if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) == 0) {
+@@ -290,7 +292,7 @@ class PosixConditionBase {
+   WaitResult Wait(std::chrono::milliseconds timeout) {
+     bool executed;
+     auto predicate = [this] { return this->signaled(); };
+-#if REX_PLATFORM_LINUX
++#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
+     auto native_mutex = static_cast<pthread_mutex_t*>(mutex_.native_handle());
+     int lock_result = pthread_mutex_lock(native_mutex);
+     if (lock_result == EOWNERDEAD) {
+@@ -344,7 +346,7 @@ class PosixConditionBase {
+       locks.reserve(handles.size());
+ 
+       for (size_t i = 0; i < handles.size(); ++i) {
+-#if REX_PLATFORM_LINUX
++#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
+         auto native_mutex = static_cast<pthread_mutex_t*>(handles[i]->mutex_.native_handle());
+         int result = pthread_mutex_trylock(native_mutex);
+         if (result == 0 || result == EOWNERDEAD) {
+diff --git a/src/system/CMakeLists.txt b/src/system/CMakeLists.txt
+index fc46d86..807e627 100644
+--- a/src/system/CMakeLists.txt
++++ b/src/system/CMakeLists.txt
+@@ -71,6 +71,11 @@ rex_target_pch(rexruntime
+ target_include_directories(rexruntime PUBLIC
+     $<BUILD_INTERFACE:${REXGLUE_ROOT}/include>
+     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/include>
++    # Public headers reach <imgui.h> (rex/rex_app.h -> rex/ui/style.h). imgui is
++    # linked PRIVATE below, so expose its include dir to consumers that compile
++    # these headers from the source tree. The install flattens imgui.h into the
++    # include root, so this is BUILD_INTERFACE only.
++    $<BUILD_INTERFACE:${REXGLUE_ROOT}/thirdparty/imgui>
+     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+ )
+ target_include_directories(rexruntime PRIVATE
+diff --git a/src/system/gpu_plugin_loader.cpp b/src/system/gpu_plugin_loader.cpp
+index 754fa13..903d67f 100644
+--- a/src/system/gpu_plugin_loader.cpp
++++ b/src/system/gpu_plugin_loader.cpp
+@@ -55,6 +55,13 @@ std::vector<platform::DynamicLibrary>& LoadedPlugins() {
+ }  // namespace
+ 
+ std::unique_ptr<IGraphicsSystem> LoadGpuPlugin(std::string_view name, std::string_view backend) {
++#if REX_PLATFORM_ANDROID
++  // On Android the plugin .so is packaged in the app's native library directory,
++  // which is on the dynamic linker's search path. Load it by soname so the
++  // linker resolves it; there is no writable executable folder to stage it in,
++  // and GetExecutableFolder() resolves to the read-only /system/bin.
++  std::filesystem::path path = PluginFileName(name);
++#else
+   auto path = rex::filesystem::GetExecutableFolder() / PluginFileName(name);
+   if (!std::filesystem::exists(path)) {
+     REXSYS_ERROR(
+@@ -63,6 +70,7 @@ std::unique_ptr<IGraphicsSystem> LoadGpuPlugin(std::string_view name, std::strin
+         name, path.string(), name);
+     return nullptr;
+   }
++#endif
+ 
+   platform::DynamicLibrary library;
+   if (!library.Load(path, platform::SymbolResolution::kImmediate)) {
+diff --git a/src/ui/CMakeLists.txt b/src/ui/CMakeLists.txt
+index 5bd3dc5..11bc4f6 100644
+--- a/src/ui/CMakeLists.txt
++++ b/src/ui/CMakeLists.txt
+@@ -72,6 +72,10 @@ elseif(APPLE)
+     set(REXUI_PLATFORM_SOURCES
+         surface_mac.cpp
+     )
++elseif(ANDROID)
++    set(REXUI_PLATFORM_SOURCES
++        surface_android.cpp
++    )
+ else()
+     set(REXUI_PLATFORM_SOURCES
+         surface_gnulinux.cpp
+@@ -146,7 +150,13 @@ if(REXGLUE_USE_VULKAN)
+ endif()
+ 
+ # Platform-specific dependencies
+-if(UNIX AND NOT APPLE)
++if(ANDROID)
++    # Android is UNIX but has no X11/Wayland. vulkan/api.h gates the
++    # wayland-client.h include on REX_PLATFORM_GNU_LINUX, which is not set here,
++    # so Android only needs the platform's own window + logging libraries. The
++    # Vulkan Android surface (VK_USE_PLATFORM_ANDROID_KHR) is enabled by api.h.
++    target_link_libraries(rexui PUBLIC android log)
++elseif(UNIX AND NOT APPLE)
+     find_package(PkgConfig REQUIRED)
+     pkg_check_modules(X11_XCB REQUIRED x11-xcb)
+     # Required, not optional: vulkan/api.h pulls in <wayland-client.h> on every
+diff --git a/src/ui/surface_android.cpp b/src/ui/surface_android.cpp
+new file mode 100644
+index 0000000..bd77577
+--- /dev/null
++++ b/src/ui/surface_android.cpp
+@@ -0,0 +1,35 @@
++/**
++ ******************************************************************************
++ * Xenia : Xbox 360 Emulator Research Project                                 *
++ ******************************************************************************
++ * Copyright 2021 Ben Vanik. All rights reserved.                             *
++ * Released under the BSD license - see LICENSE in the root for more details. *
++ ******************************************************************************
++ *
++ * @modified    Tom Clay, 2026 - Adapted for ReXGlue runtime
++ * @modified    Android native-window surface, 2026
++ */
++
++#include <SDL3/SDL.h>
++
++#include <rex/ui/surface_android.h>
++
++namespace rex {
++namespace ui {
++
++bool AndroidNativeWindowSurface::GetSizeImpl(uint32_t& width_out, uint32_t& height_out) const {
++  // Report the swapchain extent in physical pixels. SDL's pixel size tracks the
++  // ANativeWindow buffer geometry and is kept in sync across rotation/resize,
++  // so it is preferred over ANativeWindow_getWidth/Height, which can briefly
++  // report stale values around surfaceChanged. Mirrors WaylandSurface.
++  int w = 0, h = 0;
++  if (!SDL_GetWindowSizeInPixels(sdl_window_, &w, &h) || w <= 0 || h <= 0) {
++    return false;
++  }
++  width_out = uint32_t(w);
++  height_out = uint32_t(h);
++  return true;
++}
++
++}  // namespace ui
++}  // namespace rex
+diff --git a/src/ui/window_sdl.cpp b/src/ui/window_sdl.cpp
+index 2251429..d55d1ec 100644
+--- a/src/ui/window_sdl.cpp
++++ b/src/ui/window_sdl.cpp
+@@ -35,6 +35,8 @@
+ #include <SDL3/SDL_metal.h>
+ 
+ #include <rex/ui/surface_mac.h>
++#elif REX_PLATFORM_ANDROID
++#include <rex/ui/surface_android.h>
+ #else
+ #include <X11/Xlib-xcb.h>
+ #include <rex/ui/surface_gnulinux.h>
+@@ -398,6 +400,15 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
+       SDL_Metal_DestroyView(metal_view);
+     }
+   }
++#elif REX_PLATFORM_ANDROID
++  SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window_);
++  if (allowed_types & Surface::kTypeFlag_AndroidNativeWindow) {
++    auto* native_window = static_cast<ANativeWindow*>(
++        SDL_GetPointerProperty(props, SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr));
++    if (native_window) {
++      return std::make_unique<AndroidNativeWindowSurface>(native_window, sdl_window_);
++    }
++  }
+ #else
+   SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window_);
+   if (allowed_types & Surface::kTypeFlag_WaylandSurface) {
+diff --git a/src/ui/windowed_app_main_sdl.cpp b/src/ui/windowed_app_main_sdl.cpp
+index 77bb1dc..2135172 100644
+--- a/src/ui/windowed_app_main_sdl.cpp
++++ b/src/ui/windowed_app_main_sdl.cpp
+@@ -34,6 +34,13 @@
+ #include <shellapi.h>
+ #endif
+ 
++#if REX_PLATFORM_ANDROID
++#include <SDL3/SDL.h>
++#include <SDL3/SDL_main.h>  // Remaps main -> SDL_main; SDL's Java activity calls it.
++
++#include <rex/main_android.h>
++#endif
++
+ namespace {
+ 
+ int RunWindowedApp(int argc, char** argv) {
+@@ -55,7 +62,18 @@ int RunWindowedApp(int argc, char** argv) {
+     }
+ #endif
+ 
++#if XE_UI_WINDOWED_APPS_IN_LIBRARY
++    // Android builds every app into a single library; each registers itself via
++    // REX_DEFINE_APP. Run the sole registered app (one game per library).
++    rex::ui::WindowedApp::Creator app_creator = rex::ui::WindowedApp::GetSoleCreator();
++    if (!app_creator) {
++      REXLOG_ERROR("No windowed app is registered in this library");
++      return EXIT_FAILURE;
++    }
++    std::unique_ptr<rex::ui::WindowedApp> app = app_creator(app_context);
++#else
+     std::unique_ptr<rex::ui::WindowedApp> app = rex::ui::GetWindowedAppCreator()(app_context);
++#endif
+ 
+     // Match remaining positional args to the app's expected options.
+     const auto& option_names = app->GetPositionalOptions();
+@@ -124,6 +142,42 @@ int WINAPI wWinMain(HINSTANCE hinstance, HINSTANCE hinstance_prev, LPWSTR comman
+   return RunWindowedApp(static_cast<int>(argv_ptrs.size()), argv_ptrs.data());
+ }
+ 
++#elif REX_PLATFORM_ANDROID
++
++// SDL_main.h (included above) remaps this to SDL_main; SDL's Java activity
++// (nativeRunMain) invokes it after loading the app's shared library. Android
++// has no command line, so synthesize the data-root options, pointing them at
++// the app's external storage where the player stages their extracted game
++// files (e.g. <external>/game/extracted/default.xex). These are the same
++// --game_data_root / --user_data_root / --cache_root options the desktop
++// build accepts, so no app-specific wiring is needed.
++int main(int argc, char* argv[]) {
++  // Load API-26+ dynamic symbols (ASharedMemory_create, etc.) before the runtime
++  // constructs the guest memory arena; CreateFileMappingHandle needs them.
++  rex::InitializeAndroidApp();
++
++  std::vector<std::string> synthetic;
++  synthetic.emplace_back(argc > 0 && argv && argv[0] ? argv[0] : "nhl3on3");
++  if (const char* ext = SDL_GetAndroidExternalStoragePath()) {
++    const std::string base(ext);
++    synthetic.push_back("--game_data_root=" + base + "/game/extracted");
++    synthetic.push_back("--user_data_root=" + base + "/user");
++    synthetic.push_back("--cache_root=" + base + "/cache");
++  }
++  // Preserve any extra args SDL forwarded from the launching intent.
++  for (int i = 1; i < argc; ++i) {
++    if (argv && argv[i]) {
++      synthetic.emplace_back(argv[i]);
++    }
++  }
++  std::vector<char*> ptrs;
++  ptrs.reserve(synthetic.size());
++  for (auto& s : synthetic) {
++    ptrs.push_back(s.data());
++  }
++  return RunWindowedApp(static_cast<int>(ptrs.size()), ptrs.data());
++}
++
+ #else
+ 
+ int main(int argc, char* argv[]) {
