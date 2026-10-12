@@ -114,10 +114,20 @@ endmacro()
 # codegen, including one a project assembles itself rather than taking the
 # library rexglue_setup_target() builds. The stamp comes first: the DEPFILE
 # names it.
+# Codegen is a host build step. When cross-compiling (e.g. Android), the in-tree
+# rex::rexglue would be built for the target and cannot run on the build host, so
+# REXGLUE_HOST_CODEGEN may point at a host-built rexglue executable. Using a plain
+# path in that case also drops the implicit dependency on the target-arch tool, so
+# it is not built for the target at all.
+if(REXGLUE_HOST_CODEGEN)
+    set(_rexglue_codegen_command "${REXGLUE_HOST_CODEGEN}")
+else()
+    set(_rexglue_codegen_command "$<TARGET_FILE:rex::rexglue>")
+endif()
 add_custom_command(
     OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.build.stamp"
            ${REXGLUE_ENTRYPOINT_GENERATED_SOURCES}
-    COMMAND $<TARGET_FILE:rex::rexglue> codegen ${CMAKE_CURRENT_SOURCE_DIR}/nhl3on3_manifest.toml
+    COMMAND ${_rexglue_codegen_command} codegen ${CMAKE_CURRENT_SOURCE_DIR}/nhl3on3_manifest.toml
     DEPFILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/default/codegen.d"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Generating recompiled code for nhl3on3"

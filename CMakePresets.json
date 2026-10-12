@@ -183,6 +183,22 @@
             "displayName": "macOS ARM64 RelWithDebInfo",
             "inherits": "mac-arm64-base",
             "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+        },
+        {
+            "name": "android-arm64",
+            "displayName": "Android arm64-v8a",
+            "description": "Cross-compile game + SDK for Android arm64-v8a (needs ANDROID_NDK_HOME). Gradle drives CMake too; this preset is for standalone/CI configure.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+            "cacheVariables": {
+                "ANDROID_ABI": "arm64-v8a",
+                "ANDROID_PLATFORM": "android-26",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "REXSDK_DIR": "${sourceDir}/../rexglue-sdk",
+                "REXGLUE_USE_VULKAN": "ON",
+                "REXGLUE_USE_D3D12": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -203,6 +219,7 @@
         { "name": "mac-amd64-relwithdebinfo", "configurePreset": "mac-amd64-relwithdebinfo" },
         { "name": "mac-arm64-debug", "configurePreset": "mac-arm64-debug" },
         { "name": "mac-arm64-release", "configurePreset": "mac-arm64-release" },
-        { "name": "mac-arm64-relwithdebinfo", "configurePreset": "mac-arm64-relwithdebinfo" }
+        { "name": "mac-arm64-relwithdebinfo", "configurePreset": "mac-arm64-relwithdebinfo" },
+        { "name": "android-arm64", "configurePreset": "android-arm64" }
     ]
 }
