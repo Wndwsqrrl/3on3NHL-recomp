@@ -23,6 +23,7 @@ git clone --recursive --branch v0.10.0 https://github.com/rexglue/rexglue-sdk.gi
 cd rexglue-sdk
 git apply <this-repo>/patches/rexglue/0001-input-system-lock.patch
 git apply <this-repo>/patches/rexglue/0002-codegen-vpk-unsigned-alias.patch
+git apply <this-repo>/patches/rexglue/0003-android-support.patch
 cmake --preset win-amd64
 cmake --build out/build/win-amd64 --target install
 ```
@@ -66,6 +67,7 @@ What's in this repository:
 | `nhl3on3.toml` | Runtime settings, copied next to the executable |
 | `src/` | The app class and kernel exports the runtime lacks or only stubs |
 | `launcher/` | The launcher (C#, .NET 8) |
+| `android/` | The Android (arm64) app: a Gradle/SDL3 project that builds the game into an APK |
 | `patches/rexglue/` | Fixes the port needs in ReXGlue |
 | `dist/` | Player README and license texts shipped with releases |
 | `docs/images/` | Screenshots for the README |
@@ -91,3 +93,54 @@ Never include anything from `game/` or `generated/`.
 
 `rexruntime.dll` contains FFmpeg and libmspack under the LGPL 2.1; see
 [THIRD_PARTY.md](THIRD_PARTY.md) for how to rebuild it with modified versions.
+
+## Android (arm64)
+
+The game also builds for Android (arm64-v8a): a shared library (`libmain.so`) loaded by an
+SDL3 activity, with the renderer on Vulkan. The project is in [`android/`](android/); its
+[README](android/README.md) has more detail.
+
+**Prerequisites (in addition to the above):**
+
+- Android Studio, with the Android SDK, **NDK (r26+)** and CMake (SDK Manager -> SDK Tools).
+- A JDK 17+ for Gradle; Android Studio's bundled JBR works (point `JAVA_HOME` at
+  `<Android Studio>/jbr` for command-line builds).
+- The ReXGlue SDK with the patches applied (step 1). The Android build cross-compiles the SDK
+  from source and reuses the **host** recompiler for codegen, so build the host SDK first - the
+  app's `build.gradle` finds `rexglue-sdk/out/.../rexglue.exe` automatically and passes it as
+  `REXGLUE_HOST_CODEGEN` (codegen can't run a cross-compiled tool on the build host).
+- The game files staged at `game/extracted/` (step 2), same as the desktop build.
+
+**Build the APK:**
+
+Point `android/gradle.properties` -> `rexSdkDir` at your `rexglue-sdk` checkout (default
+`../../rexglue-sdk`, i.e. a sibling of this repo), then from `android/`:
+
+```
+./gradlew :app:assembleDebug        # or :app:assembleRelease (needs a signing config)
+```
+
+Gradle drives the NDK/CMake cross-build and packages `app/build/outputs/apk/debug/app-debug.apk`
+(~75 MB: `libmain.so`, `librexruntime*.so`, the `librexgpu-xenos*.so` Vulkan plugin, and
+`libc++_shared.so`). The native code is built RelWithDebInfo (`-O2`) in both variants - a `-O0`
+build of the ~230 MB of recompiled C++ is impractical. Opening `android/` in Android Studio also
+works.
+
+**Install and provide the game data on-device:**
+
+```
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+The APK ships no game content; each player supplies their own package, just like the desktop
+build. Until the in-app importer lands, stage the extracted files under the app's external
+storage:
+
+```
+adb push game/extracted "/sdcard/Android/data/com.wndwsqrrl.nhl3on3/files/game/"
+adb shell chmod -R 777 "/sdcard/Android/data/com.wndwsqrrl.nhl3on3/files/game"
+```
+
+(The `chmod` is needed because `adb push` creates the files owned by `shell`; redo it whenever
+you re-push. A first-run importer that lets the app extract an XBLA package it is handed will
+replace this.)
