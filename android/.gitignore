@@ -1,0 +1,13 @@
+# Gradle / Android Studio
+.gradle/
+.idea/
+*.iml
+local.properties
+
+# Build output (APKs are published as release assets, not committed)
+build/
+app/build/
+
+# Native (externalNativeBuild) output
+.cxx/
+app/.cxx/

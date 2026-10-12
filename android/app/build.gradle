@@ -1,0 +1,110 @@
+plugins {
+    id 'com.android.application'
+}
+
+// rexglue-sdk checkout (see android/gradle.properties). Resolved against the
+// rootProject (android/) dir so it is stable regardless of module layout.
+def rexSdkPath = rootProject.file(rexSdkDir)
+def gameCmake  = rootProject.file("../CMakeLists.txt")       // 3on3NHL-recomp/CMakeLists.txt
+def sdlJava    = new File(rexSdkPath, "thirdparty/sdl3/android-project/app/src/main/java")
+
+def rexHostCodegen = [
+    new File(rexSdkPath, "out/win-amd64/Debug/rexglued.exe"),
+    new File(rexSdkPath, "out/win-amd64/Release/rexglue.exe"),
+    new File(rexSdkPath, "out/win-amd64/RelWithDebInfo/rexgluerd.exe"),
+    new File(rexSdkPath, "out/install/win-amd64/bin/rexglue.exe")
+].find { it.exists() }
+
+android {
+    namespace 'com.wndwsqrrl.nhl3on3'
+    compileSdk 34
+    ndkVersion "30.0.16248370"
+
+    defaultConfig {
+        applicationId "com.wndwsqrrl.nhl3on3"
+        minSdk 26          // Vulkan + modern SDL3; 24 is the hard floor for Vulkan
+        targetSdk 34
+        versionCode 1
+        versionName "0.2.0"
+
+        ndk { abiFilters 'arm64-v8a' }
+
+        externalNativeBuild {
+            cmake {
+                // Gradle supplies the NDK toolchain, ANDROID_ABI and build type.
+                def cmakeArgs = [
+                    "-DREXSDK_DIR=${rexSdkPath.absolutePath.replace('\\', '/')}".toString(),
+                    "-DREXGLUE_USE_VULKAN=ON",
+                    "-DREXGLUE_USE_D3D12=OFF",
+                    "-DANDROID_STL=c++_shared"
+                ]
+                if (rexHostCodegen) {
+                    cmakeArgs.add("-DREXGLUE_HOST_CODEGEN:FILEPATH=${rexHostCodegen.absolutePath.replace('\\', '/')}".toString())
+                }
+                arguments(*cmakeArgs)
+                targets "nhl3on3"   // builds libmain.so (OUTPUT_NAME main)
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = gameCmake
+            version "3.25.0+"
+        }
+    }
+
+    sourceSets {
+        main {
+            // SDL3's Android Java glue (SDLActivity and friends) lives in the SDK.
+            java.srcDirs += sdlJava.absolutePath
+        }
+    }
+
+    buildTypes {
+        debug {
+            // A -O0 native build of ~230MB of recompiled C++ is impractical
+            // (huge and extremely slow). Build the native code optimized
+            // (RelWithDebInfo = -O2 + line tables) even for the debug APK, which
+            // stays debug-signed and easy to install. The game needs >= -O2
+            // anyway (-O3 breaks the scoreboard).
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+                }
+            }
+        }
+        release {
+            minifyEnabled false
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
+                }
+            }
+        }
+    }
+
+    // RelWithDebInfo for native in both variants: optimized, with line tables.
+    // (Release maps -O2, which the game requires anyway; -O3 breaks the scoreboard.)
+    buildFeatures {
+        prefab false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        jniLibs {
+            // The GPU plugin (librexgpu-xenos.so) and libc++_shared.so are
+            // loaded at runtime; keep them uncompressed and bundled.
+            useLegacyPackaging false
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

@@ -1,0 +1,4 @@
+// Root build script for the 3 on 3 NHL Arcade Android app.
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}
