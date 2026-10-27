@@ -18,6 +18,13 @@ include(generated/rexglue.cmake)
 set(NHL3ON3_SOURCES
     src/main.cpp
     src/kernel_stubs.cpp
+    # --- online play (ported from startupandhold/3on3ArcadeRecomp, MIT) ---
+    src/nhl3on3_net.cpp
+    src/nhl3on3_lockstep_relay.cpp
+    src/nhl3on3_dist_trace.cpp
+    src/nhl3on3_team_lobby.cpp
+    src/nhl3on3_roster.cpp
+    src/nhl3on3_guest_log.cpp
 )
 
 if(ANDROID)
@@ -33,6 +40,11 @@ else()
 endif()
 
 rexglue_setup_target(nhl3on3 GPU_PLUGINS xenos)
+
+# Online play uses Winsock on Windows; BSD sockets are in libc on Linux/Android.
+if(WIN32)
+    target_link_libraries(nhl3on3 PRIVATE ws2_32 dbghelp)
+endif()
 
 # Default settings, read by the runtime from the executable's folder.
 add_custom_command(TARGET nhl3on3 POST_BUILD

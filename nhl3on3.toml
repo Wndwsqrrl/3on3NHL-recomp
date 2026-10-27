@@ -12,3 +12,14 @@ gpu_allow_invalid_fetch_constants = true
 
 # Text, the scoreboard and team-colored equipment are drawn on the GPU and read back by the game.
 readback_resolve = "full"
+
+# --- Online play (ported from 3on3ArcadeRecomp) ---
+# Emulate a signed-in Xbox LIVE profile and the XNet stack.
+online = true
+# Shown to other players (up to 15 chars); empty = use the profile name. Each
+# instance needs its own, so override per instance with --online_gamertag=NAME.
+online_gamertag = ""
+# Community matchmaking + relay server (default). Change to your own if you host one.
+online_server = "nhl3on3-turtle.fly.dev"
+# Relay game traffic through the server so no port forwarding is needed.
+online_tunnel = true
